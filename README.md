@@ -159,4 +159,8 @@ Reddit Giveaway Tools v1.0
 
 ## License
 
-No open-source license is included in this package yet. Add the license you want before publishing if you intend others to have explicit permission to reuse, modify, or redistribute the code.
+This project is licensed under the MIT License.
+
+Copyright (c) 2026 devoidzer0
+
+See the `LICENSE` file for the full license text.
