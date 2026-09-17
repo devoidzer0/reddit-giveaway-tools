@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '3.5.0';
+  const VERSION = '3.5.1';
   const PICKER_URL = 'http://localhost/reddit-giveaway-picker-offline/';
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -76,8 +76,18 @@
     return String(raw || '').replace(/\s*\[[^\]\n]+\]\s*$/g, '').trim();
   }
 
+  function stripTrailingGameUrl(raw) {
+    // New giveaway posts may use:
+    //   Game Title: https://store.steampowered.com/app/...
+    // Old Reddit renders Markdown links as their visible URL text, so remove
+    // only a trailing URL and the separator immediately before it.
+    return String(raw || '')
+      .replace(/\s*:\s*https?:\/\/\S+\s*$/i, '')
+      .trim();
+  }
+
   function cleanGameTitle(raw) {
-    let s = cleanText(raw).replace(/\n+/g, ' ');
+    let s = stripTrailingGameUrl(cleanText(raw)).replace(/\n+/g, ' ');
     s = s.replace(/^\s*\d{1,3}\s*[.)\]:-]\s*/, '');
     s = s.replace(/\bCONTACT\s+ME\b\s*!?/ig, ' ');
     s = s.replace(/(?:^|\s)[\[(]?u\/[A-Za-z0-9_-]+[\])]?/ig, ' ');
@@ -119,7 +129,7 @@
         const games = finalizeGames(rawItems);
         return {
           games,
-          source: `[GAMES] block in the original post (${rawItems.length} lines; trailing [notes] ignored)`
+          source: `[GAMES] block in the original post (${rawItems.length} lines; trailing Steam/other URLs and [notes] ignored)`
         };
       }
       return { games: [], source: 'Found [GAMES] but no closing [/GAMES] marker.' };
@@ -520,7 +530,7 @@
 
     const note = document.createElement('div');
     note.textContent =
-      'Designed for Old Reddit. Auto-load expands comments without repeated scrolling. v3.5 can either download one giveaway package or open Giveaway Picker directly with the package already loaded.';
+      'Designed for Old Reddit. Auto-load expands comments without repeated scrolling. v3.5.1 supports game-list lines with trailing Steam/other URLs and can either download one giveaway package or open Giveaway Picker directly with the package already loaded.';
     note.style.cssText =
       'background:#f4f5f7;border-radius:8px;padding:9px;margin-bottom:12px;color:#444';
 
