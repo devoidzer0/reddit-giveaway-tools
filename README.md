@@ -1,15 +1,15 @@
 # Reddit Giveaway Tools
 
-A two-part, local-first toolkit for running ranked-choice game giveaways from Reddit.
+A two-part, local-first toolkit for running ranked-choice Steam game giveaways from Reddit.
 
 Current components:
 
-- **Reddit Giveaway Extractor v3.5**
-- **Reddit Giveaway Picker v2.9.1**
+- **Reddit Giveaway Extractor v3.5.4**
+- **Reddit Giveaway Picker v2.11**
 
 The intended workflow is:
 
-**Old Reddit thread → Extractor → Giveaway Picker → Review ambiguous choices → Randomize entrants → Assign games → Export public results HTML**
+**Old Reddit thread → Extractor → Giveaway Picker → Review ambiguous choices → Add Steam keys → Randomize entrants → Assign games → Contact winners → Export results/audit**
 
 ## What the tools do
 
@@ -20,10 +20,14 @@ The extractor is a bookmarklet designed for **Old Reddit**. It:
 - loads all available comments without repeatedly scrolling the page;
 - identifies top-level comments used as giveaway entries;
 - reads the giveaway game list from the original post;
-- supports a preferred `[GAMES] ... [/GAMES]` block for future giveaways;
+- supports a preferred `[GAMES] ... [/GAMES]` block for new giveaways;
+- supports game-list lines that include Steam or other HTTP/HTTPS URLs after the game title;
+- preserves title characters such as `|` and `~`;
 - keeps compatibility with older completed giveaways that contain winner/TBD annotations;
 - exports a single JSON giveaway package containing the verified game list, top-level comments, and thread metadata;
-- can open the local Giveaway Picker directly with that package already loaded.
+- can open the local Giveaway Picker directly with that package already loaded;
+- automatically downloads a JSON backup when **Open in GIVEAWAY PICKER + Save Backup** is used;
+- uses a Safari-compatible bookmarklet wrapper.
 
 No Reddit API or OAuth credentials are used.
 
@@ -32,17 +36,28 @@ No Reddit API or OAuth credentials are used.
 The picker is a local PHP app. It:
 
 - imports the extractor's single JSON giveaway package;
+- accepts direct handoff from the extractor at `http://localhost/reddit-giveaway-picker-offline/`;
 - parses each entrant's ranked game choices;
 - automatically handles common formatting variations, abbreviations, misspellings, and run-on lists;
 - flags genuinely uncertain choices for manual review;
-- allows a review line to be resolved into multiple ranked games when necessary;
+- allows a review fragment to be resolved into multiple ranked games when necessary;
 - randomizes the **entire eligible entrant pool once**;
 - walks through that fixed randomized order and awards each person their highest-ranked game still available;
 - continues until every game has been awarded or no eligible choices remain;
 - keeps the complete randomized entrant order for auditing;
-- exports a standalone public HTML results page.
+- stores Steam keys locally for the active PHP session;
+- can fill all Steam-key fields with fake test keys for testing;
+- generates a private award message for every winner;
+- opens a Reddit private-message compose page with the subject **Steam Giveaway WINNER** already supplied;
+- provides a fallback link to the winner's Reddit profile for using the **Start Chat** control;
+- tracks each winner as **Not sent**, **Award message sent**, or **Unable to contact**;
+- returns to the exact winner/card after a contact-status update;
+- separates winner-selection results from the private winner-contact workflow;
+- exports both a concise public results HTML file and a full draw-audit HTML file.
 
-Listing more acceptable games can improve an entrant's chance of winning *something*, because the picker can move to their next ranked choice if an earlier choice has already been taken.
+Steam keys and winner-contact information are intentionally excluded from the exported public results and full draw-audit files.
+
+Listing more acceptable games can improve an entrant's chance of winning *something*, because if an earlier choice has already been taken the picker can move to that entrant's next ranked choice.
 
 ## Repository layout
 
@@ -50,6 +65,7 @@ Listing more acceptable games can improve an entrant's chance of winning *someth
 reddit-giveaway-tools/
 ├── README.md
 ├── CHANGELOG.md
+├── LICENSE
 ├── .gitignore
 ├── extractor/
 │   ├── README.md
@@ -71,11 +87,17 @@ reddit-giveaway-tools/
 2. Drag **Reddit → Giveaway Package** to the bookmarks bar.
 3. Open the giveaway thread on `old.reddit.com`.
 4. Run the bookmarklet.
-5. Verify the game list.
+5. Verify the parsed game list.
 6. Click **Auto-load ALL comments (Old Reddit)**.
-7. Either:
-   - click **Open in GIVEAWAY PICKER**, or
-   - download the JSON giveaway package for later.
+7. Click **Open in GIVEAWAY PICKER + Save Backup**.
+
+That single action:
+
+1. downloads the giveaway-package JSON as a local backup;
+2. opens the localhost Giveaway Picker;
+3. transfers the same package to the picker automatically.
+
+You can also use **Download GIVEAWAY PACKAGE (.json)** by itself and import the saved file manually later.
 
 ### Picker
 
@@ -99,7 +121,7 @@ Then open:
 http://localhost/reddit-giveaway-picker-offline/
 ```
 
-You can also upload a previously saved giveaway JSON package manually.
+A previously saved giveaway JSON package can also be uploaded manually.
 
 ## Recommended giveaway-post format
 
@@ -107,16 +129,21 @@ For new giveaways, put the authoritative game list in the original post between 
 
 ```text
 [GAMES]
-Game One
-Game Two
-Diablo IV [requires Battle.net]
-Game Four
+Atomic Heart: https://store.steampowered.com/app/668580/Atomic_Heart/
+Keylocker | Turn Based Cyberpunk Action: https://store.steampowered.com/app/1325040/Keylocker__Turn_Based_Cyberpunk_Action/
+Pocket Mirror ~ GoldenerTraum: https://store.steampowered.com/app/1899060/Pocket_Mirror__GoldenerTraum/
 [/GAMES]
 ```
 
 Use one game per line.
 
-Trailing bracketed notes are treated as notes rather than part of the matching title.
+The extractor removes a trailing Steam/HTTP(S) URL from the matching title while preserving title characters such as `|` and `~`.
+
+Trailing bracketed notes are also supported:
+
+```text
+Diablo IV [requires Battle.net]
+```
 
 See `docs/GIVEAWAY_POST_FORMAT.md` for more detail.
 
@@ -132,29 +159,101 @@ See `docs/GIVEAWAY_POST_FORMAT.md` for more detail.
 
 The full randomized entrant order is retained for audit purposes.
 
+## Steam keys and winner award messages
+
+After the giveaway has been imported and reviewed, the picker includes a **Steam keys** section with one field for each game.
+
+Keys are stored only in the current local PHP session. They are not added to the giveaway package, public results export, or draw-audit export.
+
+For testing, **Fill All with Fake Test Keys** fills every Steam-key field with an obviously fake key.
+
+After the drawing is complete, the picker opens a separate **Winner Contact Page**. Each winner receives an automatically generated award message in this format:
+
+```text
+Hi, you entered my Steam Giveaway Raffle on /r/steam_giveaway. Congrats, you are one of the 7 randomly selected winners!
+
+You won the Steam key for [game title]! You will find your key below. Enjoy!
+
+[game key]
+```
+
+The winner count, game title, and key are filled automatically.
+
+Each winner card includes:
+
+- **Copy Message + Open Private Message** — copies the complete award message and opens Reddit's private-message compose page;
+- the private-message subject is automatically set to **Steam Giveaway WINNER**;
+- **Open Profile / Start Chat** — opens the winner's profile so Reddit's Start Chat control can be used as an alternate contact method;
+- **Mark Sent**;
+- **Mark Unable to Contact**.
+
+## Winner contact tracking
+
+The Winner Contact Page also contains a summary/table showing every winner and one of three statuses:
+
+- **Not sent**
+- **Award message sent**
+- **Unable to contact**
+
+Status changes are manual because the local picker cannot reliably confirm whether Reddit actually accepted or delivered a message.
+
+After a status is changed, the picker returns to the exact winner/card or status row that was updated instead of jumping back to the top of the page.
+
+## Results and audit exports
+
+After the draw, the picker first displays a dedicated **Selection Results** page containing:
+
+- Assignments
+- Skipped users encountered before allocation ended
+- Unassigned games
+- Draw audit
+- Full randomized entrant order
+
+Two HTML exports are available:
+
+### Public Results HTML
+
+A concise file intended for public sharing. It includes the awarded games, winner usernames, preference rank, draw timestamp, and any unassigned games.
+
+### Full Draw Audit HTML
+
+A private audit file containing:
+
+- assignments;
+- skipped users;
+- unassigned games;
+- draw audit counts;
+- the complete randomized entrant order.
+
+Steam keys and winner-contact information are deliberately excluded from both exports.
+
 ## Requirements
 
 - A modern web browser
 - Old Reddit for extraction
-- PHP for the picker
-- A local web server such as MAMP, XAMPP, or a similar PHP-capable environment
+- PHP
+- A local web server such as MAMP, XAMPP, or another PHP-capable environment
+
+The extractor has been designed to work in both Chrome and Safari.
 
 ## Privacy / API use
 
 The extractor works directly with the Reddit page already loaded in the browser. It does not use Reddit API credentials.
 
-The picker runs locally on your computer. Giveaway data does not need to be sent to a third-party service.
+The picker runs locally on your computer. Giveaway data and Steam keys do not need to be sent to a third-party service by the picker.
+
+The Reddit private-message/profile buttons open Reddit itself in the browser when you are ready to contact a winner.
 
 ## Versioning
 
 The extractor and picker are versioned independently because they can receive changes at different times.
 
-A GitHub Release can bundle both components together, for example:
+The current tested combination is:
 
 ```text
-Reddit Giveaway Tools v1.0
-- Extractor v3.5
-- Picker v2.9.1
+Reddit Giveaway Tools
+- Extractor v3.5.4
+- Picker v2.11
 ```
 
 ## License
